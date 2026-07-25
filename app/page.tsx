@@ -1,3 +1,5 @@
+import WebhookButton from './WebhookButton';
+
 export default function Home() {
   return (
     <main className="min-h-screen bg-[#050505] text-[#F0F0F0] font-sans p-10 flex flex-col items-center justify-center">
@@ -16,6 +18,8 @@ export default function Home() {
           <li>Set your webhook URL to <code className="bg-white/5 px-2 py-0.5 rounded text-sm font-mono text-white">{process.env.APP_URL}/api/telegram-webhook</code>.</li>
           <li>In Telegram, send: <code className="bg-white/5 px-2 py-0.5 rounded text-sm font-mono text-white">/image [your prompt]</code></li>
         </ol>
+        
+        <WebhookButton />
       </section>
     </main>
   );
