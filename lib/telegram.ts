@@ -5,12 +5,19 @@ export async function sendTelegramRequest(method: string, body: any) {
   }
 
   const url = `https://api.telegram.org/bot${token}/${method}`;
-  const response = await fetch(url, {
+  
+  let options: RequestInit = {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  };
 
+  if (body instanceof FormData) {
+    options.body = body;
+  } else {
+    options.headers = { 'Content-Type': 'application/json' };
+    options.body = JSON.stringify(body);
+  }
+
+  const response = await fetch(url, options);
   return response.json();
 }
 
@@ -30,4 +37,14 @@ export async function sendPhoto(chatId: string | number, photoUrlOrBase64: strin
     body.caption = caption;
   }
   return sendTelegramRequest('sendPhoto', body);
+}
+
+export async function sendVideo(chatId: string | number, videoBuffer: ArrayBuffer, caption?: string) {
+  const formData = new FormData();
+  formData.append('chat_id', chatId.toString());
+  formData.append('video', new Blob([videoBuffer], { type: 'video/mp4' }), 'video.mp4');
+  if (caption) {
+    formData.append('caption', caption);
+  }
+  return sendTelegramRequest('sendVideo', formData);
 }

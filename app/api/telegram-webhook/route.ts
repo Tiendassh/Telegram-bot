@@ -1,6 +1,6 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, GenerateVideosOperation } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
-import { sendTelegramRequest, sendMessage, sendPhoto } from "@/lib/telegram";
+import { sendTelegramRequest, sendMessage, sendPhoto, sendVideo } from "@/lib/telegram";
 
 const ai = new GoogleGenAI({
   apiKey: process.env.GEMINI_API_KEY!,
@@ -55,7 +55,49 @@ export async function POST(req: NextRequest) {
         await sendMessage(chatId, `Failed to generate image. Error occurred.`);
       }
     } else if (command === '/video') {
-      await sendMessage(chatId, `Video generation requested: ${args.join(' ')}. This feature is under development.`);
+      const prompt = args.join(' ');
+      await sendMessage(chatId, `Generating video for: "${prompt}"... This might take a few minutes.`);
+
+      try {
+        let operation = await ai.models.generateVideos({
+          model: 'veo-3.1-lite-generate-preview',
+          prompt: prompt,
+          config: {
+            numberOfVideos: 1,
+            resolution: '1080p',
+            aspectRatio: '16:9'
+          }
+        });
+
+        // Polling loop
+        let done = false;
+        let videoUri = "";
+        const op = new GenerateVideosOperation();
+        op.name = operation.name;
+        
+        while (!done) {
+            await new Promise(resolve => setTimeout(resolve, 10000)); // Poll every 10s
+            const updated = await ai.operations.getVideosOperation({ operation: op });
+            if (updated.done) {
+               done = true;
+               videoUri = updated.response?.generatedVideos?.[0]?.video?.uri || "";
+            }
+        }
+
+        if (videoUri) {
+          const videoRes = await fetch(videoUri, {
+            headers: { 'x-goog-api-key': process.env.GEMINI_API_KEY! }, 
+          });
+          const arrayBuffer = await videoRes.arrayBuffer();
+          
+          await sendVideo(chatId, arrayBuffer);
+        } else {
+          await sendMessage(chatId, `Failed to generate video. Please try again.`);
+        }
+      } catch (error) {
+        console.error("Error generating video:", error);
+        await sendMessage(chatId, `Failed to generate video. Error occurred.`);
+      }
     } else if (command === '/ban' && message.reply_to_message) {
       await sendTelegramRequest('banChatMember', {
         chat_id: chatId,
