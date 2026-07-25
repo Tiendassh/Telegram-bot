@@ -1,12 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-
-async function sendTelegram(method: string, body: any) {
-  return fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/${method}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-}
+import { sendTelegramRequest, sendMessage, sendPhoto } from "@/lib/telegram";
 
 export async function POST(req: NextRequest) {
   const update = await req.json();
@@ -19,6 +12,10 @@ export async function POST(req: NextRequest) {
     
     if (command === '/image') {
       const prompt = args.join(' ');
+      
+      // Notify user that processing started
+      await sendMessage(chatId, `Generating image for: "${prompt}"...`);
+
       const res = await fetch(`${process.env.APP_URL}/api/generate-image`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -26,33 +23,26 @@ export async function POST(req: NextRequest) {
       });
       const data = await res.json();
       if (data.base64) {
-        await sendTelegram('sendPhoto', {
-          chat_id: chatId,
-          photo: `data:image/png;base64,${data.base64}`,
-        });
+        await sendPhoto(chatId, `data:image/png;base64,${data.base64}`);
+      } else {
+        await sendMessage(chatId, `Failed to generate image. Please try again.`);
       }
     } else if (command === '/video') {
-      await sendTelegram('sendMessage', {
-        chat_id: chatId,
-        text: `Video generation requested: ${args.join(' ')}. This feature is under development.`,
-      });
+      await sendMessage(chatId, `Video generation requested: ${args.join(' ')}. This feature is under development.`);
     } else if (command === '/ban' && message.reply_to_message) {
-      await sendTelegram('banChatMember', {
+      await sendTelegramRequest('banChatMember', {
         chat_id: chatId,
         user_id: message.reply_to_message.from.id,
       });
-      await sendTelegram('sendMessage', { chat_id: chatId, text: "User banned." });
+      await sendMessage(chatId, "User banned.");
     } else if (command === '/kick' && message.reply_to_message) {
-      await sendTelegram('unbanChatMember', {
+      await sendTelegramRequest('unbanChatMember', {
         chat_id: chatId,
         user_id: message.reply_to_message.from.id,
       });
-      await sendTelegram('sendMessage', { chat_id: chatId, text: "User kicked." });
+      await sendMessage(chatId, "User kicked.");
     } else if (command === '/post') {
-      await sendTelegram('sendMessage', {
-        chat_id: chatId,
-        text: args.join(' '),
-      });
+      await sendMessage(chatId, args.join(' '));
     }
   }
   
