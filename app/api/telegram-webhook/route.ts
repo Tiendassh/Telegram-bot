@@ -1,5 +1,13 @@
+import { GoogleGenAI } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
 import { sendTelegramRequest, sendMessage, sendPhoto } from "@/lib/telegram";
+
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY!,
+  httpOptions: {
+    headers: { 'User-Agent': 'aistudio-build' }
+  }
+});
 
 export async function POST(req: NextRequest) {
   const update = await req.json();
@@ -16,16 +24,35 @@ export async function POST(req: NextRequest) {
       // Notify user that processing started
       await sendMessage(chatId, `Generating image for: "${prompt}"...`);
 
-      const res = await fetch(`${process.env.APP_URL}/api/generate-image`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt }),
-      });
-      const data = await res.json();
-      if (data.base64) {
-        await sendPhoto(chatId, `data:image/png;base64,${data.base64}`);
-      } else {
-        await sendMessage(chatId, `Failed to generate image. Please try again.`);
+      try {
+        const response = await ai.models.generateContent({
+          model: 'gemini-3.1-flash-lite-image',
+          contents: { parts: [{ text: prompt }] },
+          config: {
+            imageConfig: { aspectRatio: "1:1", imageSize: "1K" },
+          },
+        });
+
+        const candidate = response.candidates?.[0];
+        let base64Image: string | null | undefined = null;
+        
+        if (candidate?.content?.parts) {
+          for (const part of candidate.content.parts) {
+            if (part.inlineData) {
+              base64Image = part.inlineData.data;
+              break;
+            }
+          }
+        }
+        
+        if (base64Image) {
+          await sendPhoto(chatId, `data:image/png;base64,${base64Image}`);
+        } else {
+          await sendMessage(chatId, `Failed to generate image. Please try again.`);
+        }
+      } catch (error) {
+        console.error("Error generating image:", error);
+        await sendMessage(chatId, `Failed to generate image. Error occurred.`);
       }
     } else if (command === '/video') {
       await sendMessage(chatId, `Video generation requested: ${args.join(' ')}. This feature is under development.`);
